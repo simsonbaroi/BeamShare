@@ -80,7 +80,13 @@ export function InstantConnect({ onModeSelect, onConnection }: InstantConnectPro
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <h3 className="text-xl font-semibold">Share this QR code</h3>
-            <QrCodeDisplay code={pairingCode} />
+            <QrCodeDisplay 
+              pairingCode={pairingCode}
+              onCopy={() => navigator.clipboard?.writeText(pairingCode)}
+              onCancel={() => { setMode(null); setShowQR(false); }}
+              isConnected={false}
+              onStartTransfer={() => {}}
+            />
             <p className="text-sm text-muted-foreground">
               Receiver scans this to connect instantly
             </p>
@@ -102,7 +108,7 @@ export function InstantConnect({ onModeSelect, onConnection }: InstantConnectPro
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
             <h3 className="text-xl font-semibold">Scan sender's QR code</h3>
-            <QrScanner onScan={() => setIsConnecting(true)} />
+            <QrScanner onCodeScanned={() => setIsConnecting(true)} />
             <Button 
               variant="ghost" 
               onClick={() => setMode(null)}
