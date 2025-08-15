@@ -1,0 +1,180 @@
+Awesome idea — you can do this 100% on GitHub Pages with a static, open-source, privacy-first design by using WebRTC DataChannels for the actual file pipe and serverless signaling (QR code / copy-paste) to pair the devices. Below is (1) a concise architecture plan you can implement and (2) a “single mega-prompt” you can paste into your favorite code-gen tool to scaffold the whole repo in one go.
+
+1. Architecture plan (GitHub Pages + serverless P2P)
+
+Goals
+•	Runs from a static site (GitHub Pages). No custom backend.
+•	Cross-platform: Chrome/Edge/Firefox/Safari on Windows/macOS/Linux + Android/iOS.
+•	Sender/Receiver roles with an explicit “Ready” handshake; no transfer until both confirm.
+•	Fast, direct device-to-device over WebRTC DataChannels (uses local Wi-Fi/hotspot/5G if reachable).
+•	Files save directly on receiver; user can pick a favorite folder where supported.
+•	Modern theme, clean UX, installable PWA, open source.
+
+Key tech choices
+•	P2P transport: WebRTC DataChannel (SCTP over DTLS; congestion control, encryption built-in).
+•	Serverless signaling:
+•	Primary: QR + copy/paste of SDP blobs (no server needed).
+•	Alt: optional “community signaling” via a public paste (turn off by default to stay serverless).
+•	NAT traversal: STUN (standard, non-auth) + optional TURN fallback flag (user-supplied if ever needed).
+•	File save:
+•	Preferred: File System Access API (desktop Chromium) — “choose favorite directory” via showDirectoryPicker(); persist handle in IndexedDB.
+•	Fallbacks: <a download> per file, or Web Share API on mobile, or OPFS temporary storage with a “Move to Photos/Files” button.
+•	Resilience: chunked streaming with backpressure, resumable session ID, MD5/SHA-256 per file.
+•	Security: E2E via WebRTC; add app-level key (password/6-digit code) → derive AES-GCM key with Web Crypto for payload encryption (optional mode).
+•	Installability/UX: PWA (manifest + service worker), responsive layout (Tailwind + DaisyUI), dark/light themes.
+•	Privacy: All pairing data stays local; QR/SDP is visible only to the two devices; no analytics by default.
+
+UX flow
+1.	Home: Pick Sender or Receiver.
+2.	If Sender: select files/folders, optionally choose encryption passcode, pick “favorite directory” for future receives if you also plan to receive later (optional).
+3.	Create/Show Pairing QR containing: { role, sdp, version, optional passcode-hash }.
+4.	Receiver scans QR (camera) or pastes code → generates answer → shows a Ready switch.
+5.	Both sides must toggle “I’m Ready” → channel opens → transfer starts.
+6.	Files stream over DataChannel → saved using chosen method. Progress bars + speed (MB/s), ETA.
+7.	Post-transfer summary (files, checksums, elapsed), with “Open Folder” / “Share” actions.
+
+Repo structure/ (root)
+├─ index.html
+├─ /src
+│   ├─ main.ts
+│   ├─ webrtc/
+│   │   ├─ signaling.ts          // QR/copy-paste SDP, camera scan
+│   │   ├─ connection.ts         // RTCPeerConnection, DataChannel, ICE
+│   │   └─ transfer.ts           // chunking, backpressure, resume, integrity
+│   ├─ storage/
+│   │   ├─ fs-access.ts          // showDirectoryPicker, persistence in IndexedDB
+│   │   ├─ fallbacks.ts          // <a download>, Web Share, OPFS
+│   │   └─ crypto.ts             // optional AES-GCM helpers
+│   ├─ ui/
+│   │   ├─ state.ts              // Zustand/Valtio or simple Signals
+│   │   ├─ components/           // QR view, camera scanner, file pickers, progress bars
+│   │   └─ theme.css             // Tailwind + DaisyUI config
+│   └─ utils/
+│       ├─ checksum.ts           // streaming SHA-256
+│       └─ bytes.ts              // pretty sizes, rate
+├─ /public
+│   ├─ icon.png
+│   ├─ manifest.webmanifest
+│   └─ robots.txt
+├─ service-worker.js
+├─ tailwind.config.js
+├─ package.json
+├─ vite.config.ts (or parcel)
+├─ README.md
+└─ LICENSE Implementation notes
+•	Signaling (no server):
+•	Sender creates offer → show as QR + copyable text.
+•	Receiver scans → sets remote desc → creates answer → shows a return QR/text.
+•	Sender scans/pastes the answer → connection forms.
+•	Local speed: WebRTC prefers direct LAN candidates; hot-spot and 5G work as long as the devices can route to each other (ICE will pick the best path).
+•	Chunking: Use ReadableStream from file.stream(); send chunks (e.g., 64KB), apply backpressure by pausing when bufferedAmount crosses a threshold.
+•	Resume: Maintain per-file offset map; if reconnecting under same session ID, re-negotiate and continue.
+•	Directory favorites:
+•	On supported browsers: store FileSystemDirectoryHandle in IndexedDB after user grant; re-request permission on next loads.
+•	Else: prompt per transfer.
+•	Compatibility: Provide a matrix in README; gracefully degrade features on iOS Safari (no FS Access API; rely on “Save to Files/Share”).
+•	Accessibility/i18n: WCAG-AA, keyboard-first flows, ARIA; translation JSON scaffolding.
+
+⸻
+
+1. Copy-paste “mega prompt” to scaffold the full system
+
+Paste this into your code-gen tool (or use as a spec for manual build).
+
+Project: BeamShare — a serverless P2P file transfer web app hosted on GitHub Pages.
+
+Requirements:
+•	Static site only (build to /dist), deployable on GitHub Pages without any backend.
+•	Cross-platform (Win/macOS/Linux + Android/iOS); modern browsers only, with graceful fallbacks.
+•	Roles: Sender and Receiver with an explicit Ready handshake (transfer cannot start until both are Ready).
+•	Transport: WebRTC DataChannel with STUN; TURN optional via user-provided URL/creds (UI field, off by default).
+•	Serverless signaling as default:
+•	Create SDP offer/answer and exchange via QR codes and copy/paste blobs.
+•	Provide a built-in camera scanner (use getUserMedia + a lightweight QR decode lib) and a large text box.
+•	Encryption: WebRTC is already encrypted; add optional AES-GCM content encryption using Web Crypto with a user passcode (derive key via PBKDF2 or HKDF; never store raw passcodes).
+•	File handling:
+•	Sender can select multiple files and whole folders (if supported).
+•	Receiver can pick a favorite directory via showDirectoryPicker(); persist permission in IndexedDB; re-ask on revoke.
+•	Fallbacks: <a download> per file, Web Share API for mobile, or OPFS temp storage with a “Move/Export” flow.
+•	Show per-file and overall progress, instantaneous throughput (MB/s), ETA, and final checksums (SHA-256).
+•	Support resume: if connection breaks, let users re-pair with the same session ID to continue at last byte boundary.
+•	Performance:
+•	Chunk size ~64KB; apply backpressure using dataChannel.bufferedAmount thresholds.
+•	Stream files using ReadableStream; avoid loading entire files in memory.
+•	PWA:
+•	manifest.webmanifest, icons, offline shell for the UI (not for signaling).
+•	service-worker.js for caching static assets (do not cache user files).
+•	UI/Theme:
+•	Build with Vite + TypeScript.
+•	TailwindCSS + DaisyUI for a modern look; light/dark auto with a toggle.
+•	Pages/sections: Home (role selection), Pairing (QR in/out + text), Transfer (queue, progress), Settings (encryption, TURN, theme), About (privacy, OSS).
+•	Accessibility: keyboard navigable, ARIA roles, focus rings, reduced-motion.
+•	State mgmt: lightweight (Zustand/Signals) and modular services for webrtc, signaling, storage.
+•	Testing: basic e2e happy path with Playwright (desktop + mobile viewport), unit tests for chunker & checksums.
+•	Docs: README with feature matrix, limitations, and privacy note.
+•	License: MIT.
+
+Deliverables (file list & responsibilities):
+•	index.html: semantic skeleton, root mounts, meta tags, theme color, viewport.
+•	public/manifest.webmanifest, public/icon.png.
+•	service-worker.js: cache index.html, CSS/JS bundles; exclude user data.
+•	src/ui/components/:
+•	RolePicker.tsx or .ts + templating: Sender/Receiver cards.
+•	QRView.ts: render QR for SDP; copy buttons.
+•	QRScanner.ts: camera preview + QR decode, with permission prompts.
+•	FilePicker.ts: select files/folders; show list, sizes; drag-drop.
+•	DirectoryPicker.ts: pick favorite directory; display permission state; “Forget directory”.
+•	ProgressList.ts: per-file progress bars, speed, ETA, checksums.
+•	ReadySwitch.ts: both-ready gating UI.
+•	SettingsPanel.ts: theme, encryption passcode, TURN config, language.
+•	Toast.ts, Modal.ts.
+•	src/webrtc/connection.ts:
+•	Build RTCPeerConnection, DataChannel with reliability; ICE config; event hooks.
+•	Expose createOfferSDP(), applyRemoteSDP(), createAnswerSDP(), onChannelOpen/Close/Message, stats().
+•	src/webrtc/signaling.ts:
+•	Encode/decode SDP to JSON string; QR render; camera scan to string.
+•	Optional tiny “Clipboard” helper.
+•	src/webrtc/transfer.ts:
+•	sendFiles(files, opts) → chunked send with backpressure; per-file headers {name,size,type,hash?}.
+•	receiveLoop() → handles headers, writes to chosen sink (FS Access, download, Web Share, OPFS).
+•	Integrity check (SHA-256) optional; show in UI.
+•	Resume support via per-file offsets; negotiate resume manifest.
+•	src/storage/fs-access.ts:
+•	Favorite directory selection, permission persistence, write streams with createWritable().
+•	src/storage/fallbacks.ts:
+•	<a download> flow; Web Share API; OPFS temp write with “Export” button.
+•	src/storage/crypto.ts: AES-GCM encrypt/decrypt streams using Web Crypto; passcode-derived key with PBKDF2.
+•	src/utils/checksum.ts: streaming SHA-256.
+•	src/utils/bytes.ts: format bytes/s, time.
+•	src/ui/state.ts: global store (role, sdp blobs, ready state, queue, progress, errors).
+•	tailwind.config.js: with DaisyUI themes (“emerald”, “night”).
+•	vite.config.ts: SPA build for GitHub Pages (set base if using /repo-name).
+
+Acceptance criteria:
+•	Can pair without any server using only QR/copy-paste and complete a multi-file transfer between two browsers on the same LAN/hotspot.
+•	Transfer is blocked until both toggle Ready.
+•	Receiver can pick and persist a favorite directory on supported browsers; fallbacks work on iOS.
+•	Shows live throughput and per-file progress; verifies total bytes; optional checksum display.
+•	Works when devices are on mobile 5G hotspot (assuming NAT allows ICE to complete).
+•	PWA installable; loads offline (UI only).
+•	No analytics, no external calls except QR lib and optional STUN (documented in README).
+
+README (must include):
+•	Feature overview, privacy stance, how signaling works, performance tips, browser support matrix, limitations (e.g., iOS save flow), troubleshooting (camera permissions, QR glare), and instructions for GitHub Pages deployment.
+
+Nice-to-have (if time allows):
+•	Drag-drop pairing via “Nearby” broadcast using Web Bluetooth/WebNFC where available (gated behind flags).
+•	Theming presets and logo.
+•	Multi-language strings file.
+
+Design cues:
+•	Minimal, card-based layout; glassmorphism accents; rounded corners; subtle shadows; large QR with contrast-checked colors; animated progress using CSS (prefers-reduced-motion respected).
+
+⸻
+
+Deployment on GitHub Pages (summary)
+1.	Put code in a public repo.
+2.	Build with Vite → outputs /dist.
+3.	Settings → Pages → deploy from gh-pages branch (use vite plugin or npm run deploy script with gh-pages).
+4.	If the repo name isn’t root, set Vite base: ‘/your-repo/’.
+5.	Document your QR/copy-paste pairing so users know it’s fully serverless.
