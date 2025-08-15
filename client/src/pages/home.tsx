@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { FileSelector } from "@/components/file-selector";
 import { TransferProgress } from "@/components/transfer-progress";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import { useFileTransfer } from "@/hooks/use-file-transfer";
+import autoOptimizer from "@/lib/auto-optimize";
 import { toast } from "@/hooks/use-toast";
 import { 
   Upload, 
@@ -72,6 +73,11 @@ export default function HomePage() {
     startTransfer,
     cancelTransfer
   } = useFileTransfer();
+  
+  // Auto-optimize on component mount for maximum speed
+  useEffect(() => {
+    autoOptimizer.optimizeForSpeed();
+  }, []);
 
   const handleRoleSelect = (role: 'sender' | 'receiver') => {
     setCurrentView(role === 'sender' ? 'sender-view' : 'receiver-view');
@@ -89,7 +95,7 @@ export default function HomePage() {
 
     try {
       const code = await createOffer();
-      setPairingCode(code);
+      setPairingCode(code || '');
       setShowPairingDisplay(true);
       toast({
         title: "Pairing code created",

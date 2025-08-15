@@ -38,7 +38,7 @@ export async function encryptData(data: string, password: string): Promise<strin
   combined.set(iv);
   combined.set(new Uint8Array(encrypted), iv.length);
 
-  return btoa(String.fromCharCode(...combined));
+  return btoa(String.fromCharCode(...Array.from(combined)));
 }
 
 export async function decryptData(encryptedData: string, password: string): Promise<string> {

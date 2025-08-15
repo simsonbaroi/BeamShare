@@ -4,14 +4,53 @@ import { formatBytes, formatTime } from '../utils/bytes.js';
 
 export class FileTransferManager {
   constructor() {
-    this.chunkSize = 64 * 1024; // 64KB chunks
-    this.maxBufferedAmount = 16 * 1024 * 1024; // 16MB buffer
+    // Dynamic chunk size based on connection quality
+    this.chunkSize = this.getOptimalChunkSize();
+    this.maxBufferedAmount = 32 * 1024 * 1024; // 32MB buffer for better throughput
     this.activeTransfers = new Map();
     this.listeners = {
       progress: [],
       complete: [],
       error: []
     };
+    this.transferStartTime = null;
+    this.lastSpeedCheck = null;
+    this.speedHistory = [];
+  }
+  
+  // Get optimal chunk size based on connection and device capabilities
+  getOptimalChunkSize() {
+    // Detect connection type and adjust chunk size accordingly
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const memoryGB = navigator.deviceMemory || 4; // Default to 4GB if unknown
+    
+    let baseChunkSize = 64 * 1024; // 64KB default
+    
+    if (connection) {
+      switch (connection.effectiveType) {
+        case '4g':
+          baseChunkSize = 256 * 1024; // 256KB for 4G
+          break;
+        case '3g':
+          baseChunkSize = 32 * 1024;  // 32KB for 3G
+          break;
+        case '2g':
+        case 'slow-2g':
+          baseChunkSize = 16 * 1024;  // 16KB for slow connections
+          break;
+        default:
+          baseChunkSize = 128 * 1024; // 128KB for unknown/wifi
+      }
+    }
+    
+    // Adjust based on available memory
+    if (memoryGB >= 8) {
+      baseChunkSize *= 2; // Double chunk size for high-memory devices
+    } else if (memoryGB <= 2) {
+      baseChunkSize = Math.max(baseChunkSize / 2, 16 * 1024); // Halve for low-memory devices
+    }
+    
+    return Math.min(baseChunkSize, 1024 * 1024); // Cap at 1MB
   }
   
   // Event handling

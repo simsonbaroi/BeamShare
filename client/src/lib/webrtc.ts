@@ -18,12 +18,12 @@ interface PeerConnectionResult {
   offerCode?: string;
 }
 
+// Optimized STUN servers for fastest connection establishment
 const STUN_SERVERS = [
   'stun:stun.l.google.com:19302',
   'stun:stun1.l.google.com:19302',
-  'stun:stun2.l.google.com:19302',
-  'stun:stun3.l.google.com:19302',
-  'stun:stun4.l.google.com:19302'
+  'stun:stun.cloudflare.com:3478',
+  'stun:stun.nextcloud.com:443'
 ];
 
 export async function createPeerConnection(options: PeerConnectionOptions): Promise<PeerConnectionResult> {
@@ -46,9 +46,13 @@ export async function createPeerConnection(options: PeerConnectionOptions): Prom
     iceServers.push({ urls: turnServer });
   }
 
+  // Optimized configuration for fastest P2P connection
   const peerConnection = new RTCPeerConnection({
     iceServers,
-    iceCandidatePoolSize: 10
+    iceCandidatePoolSize: 20, // More candidates for faster connection
+    iceTransportPolicy: 'all',
+    bundlePolicy: 'max-bundle', // Bundle for efficiency
+    rtcpMuxPolicy: 'require'    // Reduce overhead
   });
 
   let dataChannel: RTCDataChannel;
@@ -66,10 +70,11 @@ export async function createPeerConnection(options: PeerConnectionOptions): Prom
   });
 
   if (isOfferer) {
-    // Create data channel
+    // Create high-performance data channel
     dataChannel = peerConnection.createDataChannel('fileTransfer', {
       ordered: true,
-      maxRetransmits: 3
+      maxPacketLifeTime: 3000, // 3 second timeout
+      protocol: 'beamshare-v1'
     });
 
     setupDataChannel(dataChannel, encryptionKey, onDataReceived);

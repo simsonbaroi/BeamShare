@@ -26,7 +26,7 @@ export function useWebRTC({ encryptionKey, turnServer }: UseWebRTCOptions = {}) 
 
       peerConnectionRef.current = peerConnection;
       dataChannelRef.current = dataChannel;
-      setLocalPeerCode(offerCode);
+      setLocalPeerCode(offerCode || '');
       
       return offerCode;
     } catch (error) {
@@ -57,7 +57,11 @@ export function useWebRTC({ encryptionKey, turnServer }: UseWebRTCOptions = {}) 
 
   const sendData = useCallback((data: ArrayBuffer | string) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-      dataChannelRef.current.send(data);
+      if (typeof data === 'string') {
+        dataChannelRef.current.send(data);
+      } else {
+        dataChannelRef.current.send(data);
+      }
       return true;
     }
     return false;
